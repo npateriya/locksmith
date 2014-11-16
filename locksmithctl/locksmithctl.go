@@ -25,6 +25,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/coreos/locksmith/etcd"
+	"github.com/coreos/locksmith/consul"
 	"github.com/coreos/locksmith/lock"
 	"github.com/coreos/locksmith/version"
 )
@@ -41,11 +42,13 @@ var (
 	globalFlagset *flag.FlagSet = flag.NewFlagSet("locksmithctl", flag.ExitOnError)
 
 	globalFlags = struct {
+		Backend      string
 		Debug        bool
-		Endpoint     string
+		EtcdEndpoint string
 		EtcdKeyFile  string
 		EtcdCertFile string
 		EtcdCAFile   string
+		ConsulEndpoint string
 		Version      bool
 	}{}
 )
@@ -55,10 +58,12 @@ func init() {
 	out.Init(os.Stdout, 0, 8, 1, '\t', 0)
 
 	globalFlagset.BoolVar(&globalFlags.Debug, "debug", false, "Print out debug information to stderr.")
-	globalFlagset.StringVar(&globalFlags.Endpoint, "endpoint", "http://127.0.0.1:4001", "etcd endpoint for locksmith. Defaults to the local instance.")
+	globalFlagset.StringVar(&globalFlags.EtcdEndpoint, "etc-endpoint", "http://127.0.0.1:4001", "etcd endpoint for locksmith. Defaults to the local instance.")
 	globalFlagset.StringVar(&globalFlags.EtcdKeyFile, "etcd-keyfile", "", "etcd key file authentication")
 	globalFlagset.StringVar(&globalFlags.EtcdCertFile, "etcd-certfile", "", "etcd cert file authentication")
 	globalFlagset.StringVar(&globalFlags.EtcdCAFile, "etcd-cafile", "", "etcd CA file authentication")
+	globalFlagset.StringVar(&globalFlags.ConsulEndpoint, "consul-endpoint", "127.0.0.1:8500", "consul endpoint for locksmith. Defaults to the local instance.")
+	globalFlagset.StringVar(&globalFlags.Backend, "backend", "etcd", "etcd or consul as backend for locksmith. Defaults to the etcd.")
 	globalFlagset.BoolVar(&globalFlags.Version, "version", false, "Print the version and exit.")
 
 	commands = []*Command{
@@ -141,7 +146,29 @@ func main() {
 
 // getLockClient returns an initialized EtcdLockClient, using an etcd
 // client configured from the global etcd flags
-func getClient() (*lock.EtcdLockClient, error) {
+func getClient() (lock.LockClient, error) {
+    if globalFlags.Backend == "etcd" {
+        return getClientEtcd()
+    } else if globalFlags.Backend == "consul" {
+        return getClientConsul()
+    } else {
+        fmt.Printf("Unsupported backend %s\n",  globalFlags.Backend)
+        os.Exit(2)
+        return nil, nil
+    }
+}
+func getClientConsul() (lock.LockClient, error) {
+	ec, err := consul.NewClient(globalFlags.ConsulEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	lc, err := lock.NewConsulKVLockClient(ec)
+	if err != nil {
+		return nil, err
+	}
+	return lc, err
+}
+func getClientEtcd() (lock.LockClient, error) {
 	var ti *etcd.TLSInfo
 	if globalFlags.EtcdCAFile != "" || globalFlags.EtcdCertFile != "" || globalFlags.EtcdKeyFile != "" {
 		ti = &etcd.TLSInfo{
@@ -150,7 +177,7 @@ func getClient() (*lock.EtcdLockClient, error) {
 			CAFile:   globalFlags.EtcdCAFile,
 		}
 	}
-	ec, err := etcd.NewClient([]string{globalFlags.Endpoint}, ti)
+	ec, err := etcd.NewClient([]string{globalFlags.EtcdEndpoint}, ti)
 	if err != nil {
 		return nil, err
 	}

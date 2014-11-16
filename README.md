@@ -63,7 +63,7 @@ New: 4
 ```
 
 
-## Implementation details 
+## Implementation details
 
 The following section describes how locksmith works under the hood.
 
@@ -73,7 +73,7 @@ locksmith uses a [semaphore][semaphore] in etcd (located at the key
 `coreos.com/updateengine/rebootlock/semaphore`) to coordinate the reboot lock.
 
 The semaphore is a JSON document, describing a simple semaphore, that clients [swap][cas]
-to take the lock. 
+to take the lock.
 
 When it is first created it will be initialized like so:
 
@@ -99,3 +99,29 @@ For a client to take the lock, the document is swapped with this:
 
 [semaphore]: http://en.wikipedia.org/wiki/Semaphore_(programming)
 [cas]: https://github.com/coreos/etcd/blob/master/Documentation/api.md#atomic-compare-and-swap
+
+## Consul backend support
+Consul is a tool for discovering and configuring services in your infrastructure.
+
+Consul Key/Value Store: Applications can make use of Consul's hierarchical key/value store for any number of purposes including: dynamic configuration, feature flagging, coordination, leader election, etc. The simple HTTP API makes it easy to use.
+
+[consul]: http://www.consul.io/intro/index.html
+[consul-api]: https://github.com/armon/consul-api
+
+### Consul usage
+
+In current commits only locksmithctl is suppported.
+
+```
+>>locksmithctl --backend=consul --consul-endpoint=consul-1:8500 status
+{"semaphore":0,"max":1,"holders":["373aa9f8cfab4f80bf7ca3a272a85628"]}
+Available: 0
+Max: 1
+
+MACHINE ID
+373aa9f8cfab4f80bf7ca3a272a85628
+
+locksmithctl addl flags:
+	--backend=etcd	:etcd or consul as backend for locksmith. Defaults to the etcd.
+	--consul-endpoint=127.0.0.1:8500	consul endpoint for locksmith. Defaults to the local instance.
+```
